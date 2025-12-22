@@ -23,11 +23,15 @@ interface Question {
   media_type?: string | null;
   media_url?: string | null;
 }
+interface Category {
+  id: string;
+  name: string;
+}
 
 export default function TestMode() {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<"A" | "B" | null>(null);
@@ -36,40 +40,44 @@ export default function TestMode() {
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [questionsAnswered, setQuestionsAnswered] = useState(0);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
+    null
+  );
 
-  // -------------------------------------------------------------
-  // LOAD QUESTIONS FROM SUPABASE
-  // -------------------------------------------------------------
   useEffect(() => {
-    loadQuestions();
+    loadCategories();
   }, []);
 
-  const loadQuestions = async () => {
-    const { data, error } = await supabase.from("questions").select("*");
+  const loadCategories = async () => {
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id, name")
+      .order("name");
 
-    if (error) {
-      Alert.alert("Error", "Failed to load questions.");
-      console.error("Error loading questions:", error);
+    if (!error) setCategories(data || []);
+  };
+
+  const loadQuestions = async (categoryId: string) => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("questions")
+      .select("*")
+      .eq("category_id", categoryId);
+
+    if (!data || error) {
+      Alert.alert("No questions in this category");
+      setLoading(false);
       return;
     }
 
-    if (!data || data.length < 10) {
-      Alert.alert(
-        "Not enough questions",
-        "You need at least 10 questions in the database."
-      );
-      return;
-    }
-
-    // Shuffle and select 10 random questions
-    const shuffled = data.sort(() => 0.5 - Math.random());
-    const selected10 = shuffled.slice(0, 10);
-
-    setQuestions(selected10);
+    setQuestions(data.sort(() => 0.5 - Math.random()));
     setLoading(false);
   };
 
-  const saveTestResult = async (score: number) => {
+  const saveTestResult = async (finalScore: number, totalAnswered: number) => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -79,13 +87,16 @@ export default function TestMode() {
     }
 
     try {
+      const percentage =
+        totalAnswered > 0 ? Math.round((finalScore / totalAnswered) * 100) : 0;
+
       // 1. Save to user_activity
       const { error: activityError } = await supabase
         .from("user_activity")
         .insert({
           user_id: user.id,
           type: "test_completed",
-          details: `Score: ${score}/10`,
+          details: `Score: ${finalScore}/${totalAnswered} out of ${questions.length} total questions (${percentage}%)`,
         });
 
       if (activityError) {
@@ -94,10 +105,7 @@ export default function TestMode() {
         return;
       }
 
-      // 2. Update user_progress in real-time
-      const percentage = Math.round((score / questions.length) * 100);
-
-      // Get current progress
+      // 2. Update user_progress
       const { data: currentProgress } = await supabase
         .from("user_progress")
         .select("tests_completed, best_score")
@@ -110,7 +118,6 @@ export default function TestMode() {
         percentage
       );
 
-      // Upsert progress
       const { error: progressError } = await supabase
         .from("user_progress")
         .upsert(
@@ -125,9 +132,8 @@ export default function TestMode() {
 
       if (progressError) {
         console.error("Progress Error:", progressError);
-        console.log("Failed to update user_progress:", progressError.message);
       } else {
-        console.log("✅ Progress updated in real-time!");
+        console.log("✅ Progress updated!");
       }
     } catch (error) {
       console.error("Error in saveTestResult:", error);
@@ -153,6 +159,7 @@ export default function TestMode() {
     const isCorrect = selectedAnswer === currentQ.correct_answer;
 
     setAnswers([...answers, isCorrect]);
+    setQuestionsAnswered(questionsAnswered + 1);
     setIsAnswerSubmitted(true);
     setShowFeedback(true);
 
@@ -167,13 +174,32 @@ export default function TestMode() {
         setIsAnswerSubmitted(false);
         setShowFeedback(false);
       } else {
-        saveTestResult(score + (isCorrect ? 1 : 0));
+        // Reached last question
+        saveTestResult(score + (isCorrect ? 1 : 0), questionsAnswered + 1);
         setShowResult(true);
       }
     }, 4000);
   };
+  const handleFinishEarly = () => {
+    Alert.alert(
+      "Finish Test",
+      `You've answered ${questionsAnswered} out of ${questions.length} questions. Do you want to finish now?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Finish",
+          onPress: () => {
+            saveTestResult(score, questionsAnswered);
+            setShowResult(true);
+          },
+        },
+      ]
+    );
+  };
 
   const restartTest = () => {
+    setSelectedCategory(null);
+    setQuestions([]);
     setCurrentQuestion(0);
     setSelectedAnswer(null);
     setScore(0);
@@ -181,12 +207,53 @@ export default function TestMode() {
     setAnswers([]);
     setIsAnswerSubmitted(false);
     setShowFeedback(false);
-    loadQuestions();
+    setQuestionsAnswered(0);
   };
 
-  // -------------------------------------------------------------
-  // UI RENDERING
-  // -------------------------------------------------------------
+  if (!selectedCategory) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="close" size={24} color="#333" />
+          </TouchableOpacity>
+          <View style={{ alignItems: "center", flex: 1 }}>
+            <Text style={styles.headerTitle}>Select Category</Text>
+            <Text style={{ fontSize: 14, color: "#8E8E93", marginTop: 4 }}>
+              Choose a topic to start your test
+            </Text>
+          </View>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <ScrollView
+          contentContainerStyle={{
+            padding: 20,
+            flexGrow: 1,
+            justifyContent: "center",
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.categoryGrid}>
+            {categories.map((cat) => (
+              <TouchableOpacity
+                key={cat.id}
+                style={styles.categoryCard}
+                activeOpacity={0.7}
+                onPress={() => {
+                  setSelectedCategory(cat);
+                  loadQuestions(cat.id);
+                }}
+              >
+                <Text style={styles.categoryIcon}>📚</Text>
+                <Text style={styles.categoryName}>{cat.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -204,21 +271,53 @@ export default function TestMode() {
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="close" size={24} color="#333" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Test Results</Text>
+          <Text style={styles.headerTitle}>
+            {selectedCategory?.name} Results
+          </Text>
+
           <View />
         </View>
 
         <ScrollView contentContainerStyle={styles.resultContainer}>
           <View style={styles.resultCard}>
             <Ionicons name="trophy" size={64} color="#4CAF50" />
-            <Text style={styles.resultMessage}>Your Score</Text>
-            <Text style={styles.resultScore}>
-              {score} / {questions.length}
+            <Text style={styles.resultMessage}>Test Completed!</Text>
+
+            <View style={styles.resultStatsContainer}>
+              <View style={styles.resultStat}>
+                <Text style={styles.resultStatLabel}>Total Questions</Text>
+                <Text style={styles.resultStatValue}>{questions.length}</Text>
+              </View>
+
+              <View style={styles.resultStat}>
+                <Text style={styles.resultStatLabel}>Questions Answered</Text>
+                <Text style={styles.resultStatValue}>{questionsAnswered}</Text>
+              </View>
+
+              <View style={styles.resultStat}>
+                <Text style={styles.resultStatLabel}>Your Score</Text>
+                <Text style={styles.resultScore}>
+                  {score} / {Math.ceil(questionsAnswered / 10) * 10}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.resultPercentage}>
+              {questionsAnswered > 0
+                ? Math.round(
+                    (score / (Math.ceil(questionsAnswered / 10) * 10)) * 100
+                  )
+                : 0}
+              % Correct
             </Text>
-            <Text style={styles.resultPercentage}>{percentage}% Correct</Text>
           </View>
 
-          <TouchableOpacity style={styles.retryButton} onPress={restartTest}>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              saveTestResult(score, questionsAnswered);
+              restartTest();
+            }}
+          >
             <Ionicons name="refresh" size={20} color="white" />
             <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
@@ -231,6 +330,13 @@ export default function TestMode() {
             <Text style={styles.homeButtonText}>Go Home</Text>
           </TouchableOpacity>
         </ScrollView>
+      </View>
+    );
+  }
+  if (questions.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>No questions available</Text>
       </View>
     );
   }
@@ -251,8 +357,9 @@ export default function TestMode() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="close" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Practice Test</Text>
-        <Text style={styles.scoreText}> </Text>
+        <Text style={styles.headerTitle}>{selectedCategory.name}</Text>
+
+        <View />
       </View>
 
       {/* Progress bar */}
@@ -353,20 +460,33 @@ export default function TestMode() {
 
       {/* Next button */}
       <View style={styles.bottomContainer}>
-        <TouchableOpacity
-          onPress={handleNextQuestion}
-          style={[
-            styles.nextButton,
-            (!selectedAnswer || isAnswerSubmitted) && styles.nextButtonDisabled,
-          ]}
-          disabled={!selectedAnswer || isAnswerSubmitted}
-        >
-          <Text style={styles.nextButtonText}>
-            {currentQuestion === questions.length - 1
-              ? "Finish Test"
-              : "Next Question"}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          {questionsAnswered > 0 && (
+            <TouchableOpacity
+              onPress={handleFinishEarly}
+              style={styles.finishButton}
+            >
+              <Text style={styles.finishButtonText}>Finish Test</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            onPress={handleNextQuestion}
+            style={[
+              styles.nextButton,
+              { flex: questionsAnswered > 0 ? 1 : undefined },
+              (!selectedAnswer || isAnswerSubmitted) &&
+                styles.nextButtonDisabled,
+            ]}
+            disabled={!selectedAnswer || isAnswerSubmitted}
+          >
+            <Text style={styles.nextButtonText}>
+              {currentQuestion === questions.length - 1
+                ? "Finish Test"
+                : "Next Question"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -531,7 +651,45 @@ const styles = StyleSheet.create({
     color: "#2C2C2E",
     lineHeight: 22,
   },
-
+  resultStatsContainer: {
+    width: "100%",
+    marginTop: 24,
+    gap: 16,
+  },
+  resultStat: {
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5E6D3",
+  },
+  resultStatLabel: {
+    fontSize: 14,
+    color: "#8E8E93",
+    marginBottom: 4,
+  },
+  resultStatValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#2C2C2E",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  finishButton: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#3B82F6",
+  },
+  finishButtonText: {
+    color: "#3B82F6",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   bottomContainer: {
     padding: 20,
     backgroundColor: "#FFFFFF",
@@ -662,5 +820,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#2C2C2E",
     lineHeight: 20,
+  },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    justifyContent: "center", // Changed from "space-between" to "center"
+    alignItems: "center",
+  },
+  categoryCard: {
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    borderRadius: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: "#dfda61ff",
+    alignItems: "center",
+    minHeight: 120,
+    justifyContent: "center",
+    shadowColor: "#D4A574",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoryIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  categoryName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2C2C2E",
+    textAlign: "center",
   },
 });

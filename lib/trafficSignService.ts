@@ -11,8 +11,9 @@ export interface TrafficSign {
   color: string;
   shape: string;
   video_url: string | null;
-  icon_url: string | null;
-  created_at: string;
+  icon_urls: string[];
+  sort_order?: number;
+  created_at?: string;
 }
 
 /**

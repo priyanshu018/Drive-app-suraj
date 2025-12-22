@@ -17,7 +17,7 @@ type GameMode = "menu" | "match" | "guess" | "speed" | "trueFalse" | "sequence";
 
 interface MatchPair {
   id: string;
-  iconUrl: string | null;
+  iconUrls: string[];
   meaning: string;
   isFlipped: boolean;
   isMatched: boolean;
@@ -120,18 +120,17 @@ export default function Games() {
       }
 
       const pairs: MatchPair[] = [];
-
       signs.forEach((sign) => {
         pairs.push({
           id: `${sign.id}-icon`,
-          iconUrl: sign.icon_url,
+          iconUrls: sign.icon_urls || [],
           meaning: "",
           isFlipped: false,
           isMatched: false,
         });
         pairs.push({
           id: `${sign.id}-meaning`,
-          iconUrl: null,
+          iconUrls: [],
           meaning: sign.name_english,
           isFlipped: false,
           isMatched: false,
@@ -462,22 +461,40 @@ export default function Games() {
       console.error("Error loading sequence level:", error);
     }
   };
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const showSequenceAnimation = (sequence: TrafficSign[]) => {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
     let index = 0;
-    const interval = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       if (index < sequence.length) {
         setCurrentSequenceIndex(index);
         index++;
       } else {
-        clearInterval(interval);
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
         setTimeout(() => {
           setShowingSequence(false);
           setSequencePhase("input");
         }, 500);
       }
-    }, 1500); // Show each sign for 1.5 seconds
+    }, 1500);
   };
+
+  // Add cleanup useEffect at top of component (after line 82)
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
   const handleSequenceSignPress = (sign: TrafficSign) => {
     if (sequencePhase !== "input") return;
@@ -523,16 +540,20 @@ export default function Games() {
   };
 
   // ==================== RENDER FUNCTIONS ====================
-  const renderSignIcon = (iconUrl: string | null, size: number = 60) => {
-    if (!iconUrl) {
+  const renderSignIcon = (iconUrls: string[] | null, size: number = 60) => {
+    // Handle both array and null/undefined
+    const firstIcon = iconUrls && iconUrls.length > 0 ? iconUrls[0] : null;
+
+    if (!firstIcon) {
       return <Ionicons name="help-circle" size={size} color="#999" />;
     }
 
     return (
       <Image
-        source={{ uri: iconUrl }}
+        source={{ uri: firstIcon }}
         style={{ width: size, height: size }}
         resizeMode="contain"
+        onError={() => console.log("Failed to load sign image")}
       />
     );
   };
@@ -591,8 +612,8 @@ export default function Games() {
               disabled={pair.isFlipped || pair.isMatched}
             >
               {pair.isFlipped || pair.isMatched ? (
-                pair.iconUrl ? (
-                  renderSignIcon(pair.iconUrl, 40)
+                pair.iconUrls.length > 0 ? (
+                  renderSignIcon(pair.iconUrls, 40)
                 ) : (
                   <Text style={styles.matchCardText} numberOfLines={2}>
                     {pair.meaning}
@@ -639,7 +660,7 @@ export default function Games() {
             <>
               <View style={styles.guessSignContainer}>
                 <View style={styles.guessSignCircle}>
-                  {renderSignIcon(guessSign.icon_url, 80)}
+                  {renderSignIcon(guessSign.icon_urls, 80)}
                 </View>
                 <Text style={styles.guessQuestion}>What is this sign?</Text>
               </View>
@@ -717,7 +738,7 @@ export default function Games() {
             <>
               <View style={styles.guessSignContainer}>
                 <View style={styles.speedSignCircle}>
-                  {renderSignIcon(speedSign.icon_url, 80)}
+                  {renderSignIcon(speedSign.icon_urls, 80)}
                 </View>
                 <Text style={styles.guessQuestion}>Quick! What is this?</Text>
               </View>
@@ -772,7 +793,7 @@ export default function Games() {
             <>
               <View style={styles.tfSignContainer}>
                 <View style={styles.tfSignCircle}>
-                  {renderSignIcon(tfSign.icon_url, 100)}
+                  {renderSignIcon(tfSign.icon_urls, 100)}
                 </View>
                 <Text style={styles.tfQuestion}>Is this sign:</Text>
                 <Text style={styles.tfDescription}>{tfDescription}?</Text>
@@ -838,7 +859,7 @@ export default function Games() {
               </Text>
               <View style={styles.sequenceSignDisplay}>
                 {renderSignIcon(
-                  sequenceToShow[currentSequenceIndex]?.icon_url,
+                  sequenceToShow[currentSequenceIndex]?.icon_urls,
                   120
                 )}
               </View>
@@ -869,7 +890,7 @@ export default function Games() {
               <View style={styles.sequenceUserInputDisplay}>
                 {sequenceUserInput.map((sign, index) => (
                   <View key={index} style={styles.sequenceUserSign}>
-                    {renderSignIcon(sign.icon_url, 40)}
+                    {renderSignIcon(sign.icon_urls, 40)}
                   </View>
                 ))}
               </View>
@@ -882,7 +903,7 @@ export default function Games() {
                     onPress={() => handleSequenceSignPress(sign)}
                     activeOpacity={0.7}
                   >
-                    {renderSignIcon(sign.icon_url, 50)}
+                    {renderSignIcon(sign.icon_urls, 50)}
                   </TouchableOpacity>
                 ))}
               </View>

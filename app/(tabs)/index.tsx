@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Modal,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Redirect, useRouter } from "expo-router";
@@ -17,6 +18,10 @@ export default function TabIndex() {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userName, setUserName] = useState("");
+
+  // Consent state
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [consentLoading, setConsentLoading] = useState(false);
 
   // Dynamic Stats
   const [learnedSigns, setLearnedSigns] = useState(0);
@@ -54,12 +59,83 @@ export default function TabIndex() {
       // Both checks passed - user is authenticated
       setIsAuthenticated(true);
       await getUserInfo();
-      await loadStats();
-      setLoading(false);
+
+      // Check consent status
+      const hasConsent = await checkConsentStatus(data.session.user.id);
+
+      if (!hasConsent) {
+        setShowConsentModal(true);
+        setLoading(false);
+      } else {
+        await loadStats();
+        setLoading(false);
+      }
     } catch (error) {
       console.error("Auth check error:", error);
       setIsAuthenticated(false);
       setLoading(false);
+    }
+  };
+
+  const checkConsentStatus = async (userId: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from("user_consent")
+        .select("consent_given")
+        .eq("user_id", userId)
+        .single();
+
+      if (error) {
+        // If no record exists, user hasn't consented yet
+        if (error.code === "PGRST116") {
+          return false;
+        }
+        console.error("Error checking consent:", error);
+        return false;
+      }
+
+      return data?.consent_given === true;
+    } catch (error) {
+      console.error("Consent check error:", error);
+      return false;
+    }
+  };
+
+  const handleAcceptConsent = async () => {
+    setConsentLoading(true);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user;
+
+      if (!user) {
+        console.error("No user found");
+        setConsentLoading(false);
+        return;
+      }
+
+      // Insert or update consent
+      const { error } = await supabase.from("user_consent").upsert({
+        user_id: user.id,
+        consent_given: true,
+        consent_version: "1.0",
+        accepted_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        console.error("Error saving consent:", error);
+        alert("Failed to save consent. Please try again.");
+        setConsentLoading(false);
+        return;
+      }
+
+      // Consent saved successfully
+      setShowConsentModal(false);
+      await loadStats();
+      setConsentLoading(false);
+    } catch (error) {
+      console.error("Accept consent error:", error);
+      alert("An error occurred. Please try again.");
+      setConsentLoading(false);
     }
   };
 
@@ -157,91 +233,128 @@ export default function TabIndex() {
   ];
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.goalCard}>
-        <View style={styles.goalHeader}>
-          <Ionicons name="trophy-outline" size={24} color="#FFD700" />
-          <Text style={styles.goalTitle}>Today's Goal</Text>
-        </View>
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.goalCard}>
+          <View style={styles.goalHeader}>
+            <Ionicons name="trophy-outline" size={24} color="#FFD700" />
+            <Text style={styles.goalTitle}>Today's Goal</Text>
+          </View>
 
-        <Text style={styles.goalText}>Learn 5 new traffic signs</Text>
+          <Text style={styles.goalText}>Learn 5 new traffic signs</Text>
 
-        <View style={styles.progressBar}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.min((learnedSigns / 5) * 100, 100)}%` },
-            ]}
-          />
-        </View>
-
-        <Text style={styles.progressText}>
-          {Math.min(learnedSigns, 5)} of 5 completed
-        </Text>
-      </View>
-
-      <View style={styles.sectionsContainer}>
-        {sections.map((section) => (
-          <TouchableOpacity
-            key={section.id}
-            style={styles.sectionCard}
-            activeOpacity={0.7}
-            onPress={() => router.push(section.route as any)}
-          >
+          <View style={styles.progressBar}>
             <View
               style={[
-                styles.iconContainer,
-                { backgroundColor: section.color + "20" },
+                styles.progressFill,
+                { width: `${Math.min((learnedSigns / 5) * 100, 100)}%` },
               ]}
+            />
+          </View>
+
+          <Text style={styles.progressText}>
+            {Math.min(learnedSigns, 5)} of 5 completed
+          </Text>
+        </View>
+
+        <View style={styles.sectionsContainer}>
+          {sections.map((section) => (
+            <TouchableOpacity
+              key={section.id}
+              style={styles.sectionCard}
+              activeOpacity={0.7}
+              onPress={() => router.push(section.route as any)}
             >
-              <Ionicons
-                name={section.icon as any}
-                size={28}
-                color={section.color}
-              />
+              <View
+                style={[
+                  styles.iconContainer,
+                  { backgroundColor: section.color + "20" },
+                ]}
+              >
+                <Ionicons
+                  name={section.icon as any}
+                  size={28}
+                  color={section.color}
+                />
+              </View>
+
+              <View style={styles.sectionContent}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
+                <Text style={styles.sectionProgress}>{section.progress}</Text>
+              </View>
+
+              <View style={styles.arrowContainer}>
+                <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.quickStats}>
+          <Text style={styles.quickStatsTitle}>Quick Stats</Text>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+              <Text style={styles.statNumber}>{learnedSigns}</Text>
+              <Text style={styles.statLabel}>Today's Signs</Text>
             </View>
 
-            <View style={styles.sectionContent}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
-              <Text style={styles.sectionProgress}>{section.progress}</Text>
+            <View style={styles.statCard}>
+              <Ionicons name="flame" size={24} color="#FF5722" />
+              <Text style={styles.statNumber}>{dayStreak}</Text>
+              <Text style={styles.statLabel}>Day Streak</Text>
             </View>
 
-            <View style={styles.arrowContainer}>
-              <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+            <View style={styles.statCard}>
+              <Ionicons name="star" size={24} color="#FFD700" />
+              <Text style={styles.statNumber}>{bestScore}%</Text>
+              <Text style={styles.statLabel}>Best Score</Text>
             </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.quickStats}>
-        <Text style={styles.quickStatsTitle}>Quick Stats</Text>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-            <Text style={styles.statNumber}>{learnedSigns}</Text>
-            <Text style={styles.statLabel}>Today's Signs</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="flame" size={24} color="#FF5722" />
-            <Text style={styles.statNumber}>{dayStreak}</Text>
-            <Text style={styles.statLabel}>Day Streak</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Ionicons name="star" size={24} color="#FFD700" />
-            <Text style={styles.statNumber}>{bestScore}%</Text>
-            <Text style={styles.statLabel}>Best Score</Text>
           </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Consent Modal */}
+      <Modal
+        visible={showConsentModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalBody}>
+              <Text style={styles.modalText}>
+                This is not training school. the App is only for learning
+                purpose
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.acceptButton}
+              onPress={handleAcceptConsent}
+              disabled={consentLoading}
+              activeOpacity={0.8}
+            >
+              {consentLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.acceptButtonText}>Accept</Text>
+                  <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -374,5 +487,74 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#8E8E93",
     marginTop: 4,
+  },
+  // Modal Styles - Matching App Theme
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(44, 44, 46, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: "#FFFBEF",
+    borderRadius: 24,
+    padding: 32,
+    width: "100%",
+    maxWidth: 400,
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#E8F5E9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#2C2C2E",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontSize: 15,
+    color: "#8E8E93",
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  modalBody: {
+    marginBottom: 28,
+    paddingHorizontal: 8,
+  },
+  modalText: {
+    fontSize: 16,
+    color: "#2C2C2E",
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  acceptButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingVertical: 16,
+    borderRadius: 18,
+    backgroundColor: "#4CAF50",
+    gap: 8,
+    elevation: 2,
+  },
+  acceptButtonText: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });

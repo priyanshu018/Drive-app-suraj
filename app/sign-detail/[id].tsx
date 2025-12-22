@@ -8,6 +8,7 @@ import {
   Animated,
   ActivityIndicator,
   Image,
+  Share,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Speech from "expo-speech";
 import YoutubePlayer from "react-native-youtube-iframe";
 import { supabase } from "../../lib/supabaseClient";
+import type { TrafficSign } from "../learn-signs";
 
 export default function SignDetail() {
   const router = useRouter();
@@ -25,6 +27,7 @@ export default function SignDetail() {
   const [scaleAnim] = useState(new Animated.Value(1));
   const [playing, setPlaying] = useState(false);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     fetchSign();
@@ -50,7 +53,6 @@ export default function SignDetail() {
           hindiMeaning: data.hindi_meaning,
           realLifeExample: data.real_life_example,
         });
-        await markSignLearned(data.id);
       }
     } catch (error) {
       console.error("Error fetching sign:", error);
@@ -146,6 +148,15 @@ export default function SignDetail() {
     setPlaying(true);
   };
 
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `📍 Traffic Sign: ${sign?.nameEnglish}\n\n🇮🇳 ${sign?.nameHindi}\n\n📝 ${sign?.meaning}`,
+      });
+    } catch (error) {
+      console.log("Error sharing:", error);
+    }
+  };
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -164,6 +175,23 @@ export default function SignDetail() {
           >
             <Ionicons name="arrow-back" size={24} color="#2C2C2E" />
           </TouchableOpacity>
+
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={toggleFavorite}
+              style={styles.favoriteButton}
+            >
+              <Ionicons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={24}
+                color={isFavorite ? "#EF4444" : "#2C2C2E"}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
+              <Ionicons name="share-outline" size={24} color="#2C2C2E" />
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color="#ccc" />
@@ -172,6 +200,7 @@ export default function SignDetail() {
       </View>
     );
   }
+  const bgColor = sign.color?.startsWith("#") ? sign.color + "20" : "#00000010";
 
   return (
     <View style={styles.container}>
@@ -182,26 +211,31 @@ export default function SignDetail() {
         >
           <Ionicons name="arrow-back" size={24} color="#2C2C2E" />
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={toggleFavorite}
-          style={styles.favoriteButton}
-        >
-          <Ionicons
-            name={isFavorite ? "heart" : "heart-outline"}
-            size={24}
-            color={isFavorite ? "#EF4444" : "#2C2C2E"}
-          />
-        </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={toggleFavorite}
+            style={styles.favoriteButton}
+          >
+            <Ionicons
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={24}
+              color={isFavorite ? "#EF4444" : "#2C2C2E"}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
+            <Ionicons name="share-outline" size={24} color="#2C2C2E" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.iconSection}>
-          <View
-            style={[styles.iconCircle, { backgroundColor: sign.color + "20" }]}
-          >
-            {sign.icon_url ? (
+          <View style={[styles.iconCircle, { backgroundColor: bgColor }]}>
+            {sign.icon_urls && sign.icon_urls.length > 0 ? (
               <Image
-                source={{ uri: sign.icon_url }}
+                source={{ uri: sign.icon_urls[currentImageIndex] }}
                 style={styles.iconImage}
                 resizeMode="contain"
               />
@@ -209,7 +243,35 @@ export default function SignDetail() {
               <Ionicons name="image-outline" size={80} color="#C7C7CC" />
             )}
           </View>
+          {sign.icon_urls && sign.icon_urls.length > 1 && (
+            <View style={styles.imageNavigation}>
+              <TouchableOpacity
+                onPress={() =>
+                  setCurrentImageIndex((prev) =>
+                    prev > 0 ? prev - 1 : sign.icon_urls.length - 1
+                  )
+                }
+                style={styles.navButton}
+              >
+                <Ionicons name="chevron-back" size={24} color="#2C2C2E" />
+              </TouchableOpacity>
 
+              <Text style={styles.imageCounter}>
+                {currentImageIndex + 1} / {sign.icon_urls.length}
+              </Text>
+
+              <TouchableOpacity
+                onPress={() =>
+                  setCurrentImageIndex((prev) =>
+                    prev < sign.icon_urls.length - 1 ? prev + 1 : 0
+                  )
+                }
+                style={styles.navButton}
+              >
+                <Ionicons name="chevron-forward" size={24} color="#2C2C2E" />
+              </TouchableOpacity>
+            </View>
+          )}
           <View style={[styles.shapeBadge, { backgroundColor: sign.color }]}>
             <Text style={styles.shapeText}>{sign.shape}</Text>
           </View>
@@ -356,6 +418,13 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   favoriteButton: {
+    padding: 8,
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  shareButton: {
     padding: 8,
   },
   iconSection: {
@@ -540,6 +609,31 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#8E8E93",
     marginTop: 16,
+  },
+  imageNavigation: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    gap: 20,
+  },
+  navButton: {
+    backgroundColor: "#FFFFFF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#D4A574",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  imageCounter: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#2C2C2E",
   },
   videoSubtext: {
     fontSize: 14,

@@ -25,14 +25,14 @@ export interface TrafficSign {
   color: string;
   shape: string;
   video_url: string | null;
-  icon_url: string | null;
+  icon_urls: string[];
+  sort_order?: number;
 }
 
 export default function LearnSigns() {
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const [signs, setSigns] = useState<TrafficSign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,10 +75,17 @@ export default function LearnSigns() {
     const { data, error } = await supabase
       .from("traffic_signs")
       .select("*")
-      .order("name_english");
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false });
 
     if (error) console.error("Error fetching signs:", error);
-    else setSigns(data as TrafficSign[]);
+    else
+      setSigns(
+        (data ?? []).map((s) => ({
+          ...s,
+          icon_urls: s.icon_urls ?? [],
+        })) as TrafficSign[]
+      );
 
     setLoading(false);
   };
@@ -90,10 +97,7 @@ export default function LearnSigns() {
       sign.name_hindi.includes(searchQuery) ||
       sign.meaning.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesCategory =
-      selectedCategory === "all" || sign.shape === selectedCategory;
-
-    return matchesSearch && matchesCategory;
+    return matchesSearch;
   });
 
   const getCategoryColor = (category: string) => {
@@ -127,6 +131,11 @@ export default function LearnSigns() {
   };
 
   const renderSignCard = ({ item }: { item: TrafficSign }) => {
+    const primaryImage = item.icon_urls?.[0] ?? null;
+    const bgColor = item.color?.startsWith("#")
+      ? item.color + "15"
+      : "#00000010";
+
     return (
       <TouchableOpacity
         style={styles.signCard}
@@ -136,15 +145,10 @@ export default function LearnSigns() {
         }}
         activeOpacity={0.7}
       >
-        <View
-          style={[
-            styles.signIconContainer,
-            { backgroundColor: item.color + "15" },
-          ]}
-        >
-          {item.icon_url ? (
+        <View style={[styles.signIconContainer, { backgroundColor: bgColor }]}>
+          {primaryImage ? (
             <Image
-              source={{ uri: item.icon_url }}
+              source={{ uri: primaryImage }}
               style={{ width: 48, height: 48 }}
               resizeMode="contain"
             />
@@ -228,6 +232,9 @@ export default function LearnSigns() {
         renderItem={renderSignCard}
         keyExtractor={(item) => item.id}
         numColumns={2}
+        initialNumToRender={12}
+        windowSize={5}
+        removeClippedSubviews
         contentContainerStyle={styles.gridContainer}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
