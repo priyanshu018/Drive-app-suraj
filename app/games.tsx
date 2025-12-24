@@ -106,6 +106,16 @@ export default function Games() {
     if (percentage >= 40) return "Not bad! You can do better! 💪";
     return "Keep learning! Practice makes perfect! 📚";
   };
+  const preloadImages = async (signs: TrafficSign[]) => {
+    const imagePromises = signs.flatMap((sign) =>
+      (sign.icon_urls || []).map((url) =>
+        Image.prefetch(url).catch((err) =>
+          console.log("Failed to prefetch:", url)
+        )
+      )
+    );
+    await Promise.all(imagePromises);
+  };
 
   // ==================== MATCH GAME ====================
   const startMatchGame = async () => {
@@ -118,7 +128,7 @@ export default function Games() {
         setLoading(false);
         return;
       }
-
+      await preloadImages(signs);
       const pairs: MatchPair[] = [];
       signs.forEach((sign) => {
         pairs.push({
@@ -231,7 +241,7 @@ export default function Games() {
         Alert.alert("Error", "Not enough signs available.");
         return;
       }
-
+      await preloadImages(signs);
       const correctSign = signs[0];
       const options = signs
         .map((s) => s.name_english)
@@ -299,7 +309,7 @@ export default function Games() {
         Alert.alert("Error", "Not enough signs available.");
         return;
       }
-
+      await preloadImages(signs);
       const correctSign = signs[0];
       const options = signs
         .map((s) => s.name_english)
@@ -371,6 +381,7 @@ export default function Games() {
         return;
       }
 
+      await preloadImages(signs);
       const correctSign = signs[0];
       const wrongSign = signs[1];
 
@@ -443,7 +454,7 @@ export default function Games() {
         Alert.alert("Error", "Not enough signs available.");
         return;
       }
-
+      await preloadImages(signs);
       const sequence = signs.slice(0, sequenceLength);
       const allOptions = signs.slice(0, totalSigns);
 

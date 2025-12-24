@@ -44,7 +44,9 @@ export default function Progress() {
   const [currentStreak, setCurrentStreak] = useState<number>(0);
   const [badges, setBadges] = useState<Badge[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityRow[]>([]);
-
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(
+    new Set()
+  );
   useEffect(() => {
     loadProgressData();
   }, []);
@@ -362,11 +364,26 @@ export default function Progress() {
   const unlockedBadges = badges.filter((b) => b.unlocked).length;
 
   const renderActivityLabel = (a: ActivityRow) => {
-    if (a.type === "test_completed") return a.details || "Completed a test";
-    if (a.type === "learned_sign") return a.details || "Learned a sign";
-    return a.details || a.type;
+    if (a.type === "test_completed") {
+      return "Completed a test";
+    }
+    if (a.type === "learned_sign") {
+      return "Learned a new sign";
+    }
+    return a.type.replace(/_/g, " ");
   };
 
+  const toggleActivity = (id: string) => {
+    setExpandedActivities((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -557,42 +574,71 @@ export default function Progress() {
               <Text style={{ color: "#8E8E93" }}>No activity yet</Text>
             </View>
           ) : (
-            recentActivity.map((a) => (
-              <View key={a.id} style={styles.activityItem}>
-                <View
-                  style={[styles.activityIcon, { backgroundColor: "#DBEAFE" }]}
+            recentActivity.map((a) => {
+              const isExpanded = expandedActivities.has(a.id);
+
+              return (
+                <TouchableOpacity
+                  key={a.id}
+                  style={styles.activityItem}
+                  onPress={() => toggleActivity(a.id)}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name={
-                      a.type === "test_completed"
-                        ? "checkmark"
-                        : a.type === "learned_sign"
-                        ? "book"
-                        : "time"
-                    }
-                    size={20}
-                    color="#3B82F6"
-                  />
-                </View>
+                  <View
+                    style={[
+                      styles.activityIcon,
+                      { backgroundColor: "#DBEAFE" },
+                    ]}
+                  >
+                    <Ionicons
+                      name={
+                        a.type === "test_completed"
+                          ? "checkmark"
+                          : a.type === "learned_sign"
+                          ? "book"
+                          : "time"
+                      }
+                      size={20}
+                      color="#3B82F6"
+                    />
+                  </View>
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.activityTitle}>
-                    {renderActivityLabel(a)}
-                  </Text>
-                  <Text style={styles.activityTime}>
-                    {a.created_at
-                      ? new Date(a.created_at).toLocaleString()
-                      : ""}
-                  </Text>
-                </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.activityTitle}>
+                      {renderActivityLabel(a)}
+                    </Text>
+                    <Text style={styles.activityTime}>
+                      {a.created_at
+                        ? new Date(a.created_at).toLocaleString()
+                        : ""}
+                    </Text>
 
-                {a.type === "test_completed" && (
-                  <Text style={styles.activityScore}>
-                    {a.details?.replace("Score:", "").trim()}
-                  </Text>
-                )}
-              </View>
-            ))
+                    {isExpanded && a.details && (
+                      <View style={styles.activityDetails}>
+                        <Text style={styles.activityDetailsText}>
+                          {a.details}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.activityRight}>
+                    {a.type === "test_completed" && a.details && (
+                      <Text style={styles.activityScore}>
+                        {a.details
+                          .match(/Score:\s*(\d+)\/(\d+)/)?.[0]
+                          .replace("Score: ", "") || ""}
+                      </Text>
+                    )}
+                    <Ionicons
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={20}
+                      color="#C7C7CC"
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
           )}
         </View>
       </ScrollView>
@@ -782,7 +828,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-
+  activityRight: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  activityDetails: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F2F2F7",
+  },
+  activityDetailsText: {
+    fontSize: 13,
+    color: "#8E8E93",
+    lineHeight: 18,
+  },
   activityTitle: { fontSize: 15, fontWeight: "600", color: "#2C2C2E" },
   activityTime: { fontSize: 12, color: "#C7C7CC" },
   activityScore: { fontSize: 16, fontWeight: "bold", color: "#10B981" },

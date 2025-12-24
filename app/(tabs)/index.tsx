@@ -331,8 +331,12 @@ export default function TabIndex() {
           <View style={styles.modalContent}>
             <View style={styles.modalBody}>
               <Text style={styles.modalText}>
-                This is not training school. the App is only for learning
-                purpose
+                This app is developed only for learning and educational
+                purposes. It helps users understand Japanese traffic signs and
+                road rules in a simplified manner. This app is not an official
+                authority and should not be used for real-time driving or legal
+                decisions. Always follow official Japanese traffic laws and
+                instructions.
               </Text>
             </View>
 
@@ -536,7 +540,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   modalText: {
-    fontSize: 16,
+    fontSize: 12,
     color: "#2C2C2E",
     lineHeight: 22,
     textAlign: "center",

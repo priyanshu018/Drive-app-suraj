@@ -219,9 +219,6 @@ export default function TestMode() {
           </TouchableOpacity>
           <View style={{ alignItems: "center", flex: 1 }}>
             <Text style={styles.headerTitle}>Select Category</Text>
-            <Text style={{ fontSize: 14, color: "#8E8E93", marginTop: 4 }}>
-              Choose a topic to start your test
-            </Text>
           </View>
           <View style={{ width: 24 }} />
         </View>
@@ -245,7 +242,9 @@ export default function TestMode() {
                   loadQuestions(cat.id);
                 }}
               >
-                <Text style={styles.categoryIcon}>📚</Text>
+                <View style={styles.categoryIconContainer}>
+                  <Text style={styles.categoryEmoji}>📚</Text>
+                </View>
                 <Text style={styles.categoryName}>{cat.name}</Text>
               </TouchableOpacity>
             ))}
@@ -769,7 +768,43 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 8,
   },
-
+  categoryGrid: {
+    gap: 16,
+    paddingHorizontal: 20,
+  },
+  categoryCard: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: "#3B82F6",
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#D4A574",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoryIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: "#DBEAFE",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  categoryEmoji: {
+    fontSize: 32,
+  },
+  categoryName: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#2C2C2E",
+  },
   homeButton: {
     flexDirection: "row",
     justifyContent: "center",
@@ -821,37 +856,9 @@ const styles = StyleSheet.create({
     color: "#2C2C2E",
     lineHeight: 20,
   },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    justifyContent: "center", // Changed from "space-between" to "center"
-    alignItems: "center",
-  },
-  categoryCard: {
-    width: "48%",
-    backgroundColor: "#FFFFFF",
-    padding: 20,
-    borderRadius: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: "#dfda61ff",
-    alignItems: "center",
-    minHeight: 120,
-    justifyContent: "center",
-    shadowColor: "#D4A574",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
+
   categoryIcon: {
     fontSize: 32,
     marginBottom: 8,
-  },
-  categoryName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2C2C2E",
-    textAlign: "center",
   },
 });
