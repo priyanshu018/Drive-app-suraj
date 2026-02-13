@@ -1,19 +1,17 @@
 {
   "expo": {
-    "name": "myApp",
-    "slug": "myApp",
+    "name": "shinobidrive",
+    "slug": "shinobidrive",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.jpeg",
-    "scheme": "myapp",
+    "scheme": "shinobidrive",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.maanu111.myApp"
+      "bundleIdentifier": ""
     },
-
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -23,14 +21,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.maanu111.myApp"
+      "package": "com.priyanshukumar18.shinobidrive"
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.jpeg"
     },
-
     "plugins": [
       "expo-router",
       [
@@ -41,7 +37,6 @@
           "backgroundColor": "#000000"
         }
       ],
-
       [
         "react-native-google-mobile-ads",
         {
@@ -50,16 +45,14 @@
         }
       ]
     ],
-
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "2537f9b6-53f5-4960-9a87-5d2df084ebe1"
+        "projectId": "c23b9b61-6dbe-4b0c-afce-1973b1835ff5"
       }
     }
   }
